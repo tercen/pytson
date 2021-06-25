@@ -1,0 +1,44 @@
+document ::= version map_list      TSON Document. cstring is the version of the specification.
+
+map_list ::= map 
+        | list 
+        | uint8_list 
+        | uint16_list 
+        | uint32_list 
+        | int8_list 
+        | int16_list 
+        | int32_list 
+        | int64_list
+        | float32_list 
+        | float64_list 
+        | cstring_list
+list ::= "\x0A" uint32 (element*)     "\x0A" is the code type for list element. uint32 is the length of the list
+map ::= "\x0B" uint32 (key_value*)    "\x0B" is the code type for map element. uint32 is the length of the map
+key_value ::= cstring element
+element ::= map_list
+	   | null 
+       | integer
+       | double
+       | bool
+       | cstring 
+
+version ::= cstring
+null ::= "\x00"
+cstring	::= "\x01" (uint8*) null           First "\x00" is the code type for cstring element
+integer ::= "\x02" int32
+double ::= "\x03" float64
+bool ::= "\x04" uint8
+
+list_length ::= uint32
+list_length_in_bytes ::= uint32
+ 
+uint8_list ::= "\x64" list_length (uint8*)
+uint16_list ::= "\x65" list_length (uint16*)
+uint32_list ::= "\x66" list_length (uint32*)
+int8_list ::= "\x67" list_length (int8*)
+int16_list ::= "\x68" list_length (int16*)
+int32_list ::= "\x69" list_length (int32*)
+int64_list ::= "\x6A" list_length (int64*)
+float32_list ::= "\x6E" list_length (float32*)
+float64_list ::= "\x6F" list_length (float64*)
+cstring_list ::= "\x70" list_length_in_bytes (cstring*)
