@@ -69,6 +69,7 @@ class Serializer:
     def addString(self, obj):
         self.addType(spec.STRING_TYPE)
         self.con.write(struct.pack("{0}s".format(len(obj)), obj.encode("utf-8")))
+        self.addNull()
 
     def addInteger(self, obj):
         self.addType(spec.INTEGER_TYPE)
@@ -84,11 +85,18 @@ class Serializer:
 
     # Basic list
     def addList(self, l):
+        print("Writing list")
+        print(self.con.getvalue())
         self.addType(spec.LIST_TYPE)
+        print(self.con.getvalue())
         self.addLength(len(l))
+        print("With length")
+        print(self.con.getvalue())
 
         for o in l:  # loop through objects
+            print(f"Object writing now: {o}")
             self.addObject(o)
+            print(self.con.getvalue())
 
     # Basic map
     def addMap(self, m):
@@ -104,6 +112,7 @@ class Serializer:
 
     # Integer lists
     def addIntegerList(self, obj):
+        print(obj)
         _funcDict = {
             np.dtype("int8"): self.addInt8List,
             np.dtype("uint8"): self.addUInt8List,
@@ -112,6 +121,8 @@ class Serializer:
             np.dtype("int32"): self.addInt32List,
             np.dtype("uint32"): self.addUInt32List,
             np.dtype("int64"): self.addInt64List,
+            np.dtype("float32"): self.addFloat32List,
+            np.dtype("float64"): self.addFloat64List,
         }
 
         f = _funcDict.get(obj.dtype, None)
