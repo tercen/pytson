@@ -1,12 +1,12 @@
 import pytest
-from pytson.serializer import Serializer
+from pytson import encodeTSON
 import numpy as np
 
 
 def test_empty_list():
     try:
-        s = Serializer([])
-        print(s.readBytes())
+        s = encodeTSON([])
+        print(s)
         assert True
 
     except:
@@ -15,8 +15,8 @@ def test_empty_list():
 
 def test_empty_map():
     try:
-        s = Serializer({})
-        print(s.readBytes())
+        s = encodeTSON({})
+        print(s)
         assert True
 
     except:
@@ -25,8 +25,8 @@ def test_empty_map():
 
 def test_simple_list_with_null():
     try:
-        s = Serializer([None])
-        print(s.readBytes())
+        s = encodeTSON([None])
+        print(s)
         assert True
 
     except:
@@ -35,8 +35,8 @@ def test_simple_list_with_null():
 
 def test_simple_list_with_one():
     try:
-        s = Serializer([1])
-        print(s.readBytes())
+        s = encodeTSON([1])
+        print(s)
         assert True
 
     except:
@@ -45,8 +45,8 @@ def test_simple_list_with_one():
 
 def test_simple_list():
     try:
-        s = Serializer(["a", True, False, 42, 42.0])
-        print(s.readBytes())
+        s = encodeTSON(["a", True, False, 42, 42.0])
+        print(s)
         assert True
 
     except:
@@ -55,8 +55,8 @@ def test_simple_list():
 
 def test_simple_int32_list():
     try:
-        s = Serializer(np.array([42, 42], dtype=np.int32))
-        print(s.readBytes())
+        s = encodeTSON(np.array([42, 42], dtype=np.int32))
+        print(s)
         assert True
 
     except:
@@ -65,8 +65,8 @@ def test_simple_int32_list():
 
 def test_simple_uint32_list():
     try:
-        s = Serializer(np.array([42, 42], dtype=np.uint32))
-        print(s.readBytes())
+        s = encodeTSON(np.array([42, 42], dtype=np.uint32))
+        print(s)
         assert True
 
     except:
@@ -75,8 +75,8 @@ def test_simple_uint32_list():
 
 def test_simple_cstring_list():
     try:
-        s = Serializer(["42", "42.0"])
-        print(s.readBytes())
+        s = encodeTSON(["42", "42.0"])
+        print(s)
         assert True
 
     except:
@@ -85,8 +85,8 @@ def test_simple_cstring_list():
 
 def test_simple_map():
     try:
-        s = Serializer({"a": "a", "b": "b"})
-        print(s.readBytes())
+        s = encodeTSON({"a": "a", "b": "b"})
+        print(s)
         assert True
 
     except:
@@ -95,7 +95,7 @@ def test_simple_map():
 
 def test_all_types():
     try:
-        s = Serializer(
+        s = encodeTSON(
             {
                 "null": None,
                 "string": "hello",
@@ -118,7 +118,7 @@ def test_all_types():
             }
         )
 
-        print(s.readBytes())
+        print(s)
         assert True
 
     except:
