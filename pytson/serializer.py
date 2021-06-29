@@ -85,18 +85,11 @@ class Serializer:
 
     # Basic list
     def addList(self, l):
-        print("Writing list")
-        print(self.con.getvalue())
         self.addType(spec.LIST_TYPE)
-        print(self.con.getvalue())
         self.addLength(len(l))
-        print("With length")
-        print(self.con.getvalue())
 
         for o in l:  # loop through objects
-            print(f"Object writing now: {o}")
             self.addObject(o)
-            print(self.con.getvalue())
 
     # Basic map
     def addMap(self, m):
@@ -114,15 +107,23 @@ class Serializer:
     def addIntegerList(self, obj):
         print(obj)
         _funcDict = {
-            np.dtype("int8"): self.addInt8List,
-            np.dtype("uint8"): self.addUInt8List,
-            np.dtype("int16"): self.addInt16List,
-            np.dtype("uint16"): self.addUInt16List,
-            np.dtype("int32"): self.addInt32List,
-            np.dtype("uint32"): self.addUInt32List,
-            np.dtype("int64"): self.addInt64List,
-            np.dtype("float32"): self.addFloat32List,
-            np.dtype("float64"): self.addFloat64List,
+            np.dtype("int8"): lambda x: self.addIntList(x, type=spec.LIST_INT8_TYPE),
+            np.dtype("uint8"): lambda x: self.addIntList(x, type=spec.LIST_UINT8_TYPE),
+            np.dtype("int16"): lambda x: self.addIntList(x, type=spec.LIST_INT16_TYPE),
+            np.dtype("uint16"): lambda x: self.addIntList(
+                x, type=spec.LIST_UINT16_TYPE
+            ),
+            np.dtype("int32"): lambda x: self.addIntList(x, type=spec.LIST_INT32_TYPE),
+            np.dtype("uint32"): lambda x: self.addIntList(
+                x, type=spec.LIST_UINT32_TYPE
+            ),
+            np.dtype("int64"): lambda x: self.addIntList(x, type=spec.LIST_INT64_TYPE),
+            np.dtype("float32"): lambda x: self.addIntList(
+                x, type=spec.LIST_FLOAT32_TYPE
+            ),
+            np.dtype("float64"): lambda x: self.addIntList(
+                x, type=spec.LIST_FLOAT64_TYPE
+            ),
         }
 
         f = _funcDict.get(obj.dtype, None)
@@ -132,69 +133,18 @@ class Serializer:
 
         f(obj)
 
-    def addInt8List(self, obj):
+    def addIntList(self, obj, type):
         _l = len(obj)
-        self.addType(spec.LIST_INT8_TYPE)
+        self.addType(type)
         self.addLength(_l)
-        self.con.write(struct.pack("<{0}b".format(_l), *tuple(obj)))
-
-    def addUInt8List(self, obj):
-        _l = len(obj)
-        self.addType(spec.LIST_UINT8_TYPE)
-        self.addLength(_l)
-        self.con.write(struct.pack("<{0}B".format(_l), *tuple(obj)))
-
-    def addInt16List(self, obj):
-        _l = len(obj)
-        self.addType(spec.LIST_INT16_TYPE)
-        self.addLength(_l)
-        self.con.write(struct.pack("<{0}h".format(_l), *tuple(obj)))
-
-    def addUInt16List(self, obj):
-        _l = len(obj)
-        self.addType(spec.LIST_UINT16_TYPE)
-        self.addLength(_l)
-        self.con.write(struct.pack("<{0}H".format(_l), *tuple(obj)))
-
-    def addInt32List(self, obj):
-        _l = len(obj)
-        self.addType(spec.LIST_INT32_TYPE)
-        self.addLength(_l)
-        self.con.write(struct.pack("<{0}i".format(_l), *tuple(obj)))
-
-    def addUInt32List(self, obj):
-        _l = len(obj)
-        self.addType(spec.LIST_UINT32_TYPE)
-        self.addLength(_l)
-        self.con.write(struct.pack("<{0}I".format(_l), *tuple(obj)))
-
-    def addInt64List(self, obj):
-        _l = len(obj)
-        self.addType(spec.LIST_INT64_TYPE)
-        self.addLength(_l)
-        self.con.write(struct.pack("<{0}q".format(_l), *tuple(obj)))
-
-    def addFloat32List(self, obj):
-        _l = len(obj)
-        self.addType(spec.LIST_FLOAT32_TYPE)
-        self.addLength(_l)
-        self.con.write(struct.pack("<{0}f".format(_l), *tuple(obj)))
-
-    def addFloat64List(self, obj):
-        _l = len(obj)
-        self.addType(spec.LIST_FLOAT64_TYPE)
-        self.addLength(_l)
-        self.con.write(struct.pack("<{0}d".format(_l), *tuple(obj)))
+        self.con.write(obj.tobytes())
 
     def addStringList(self, obj):
-        _l = len(obj)
-        obj = "".join(obj)
+        _l = "".join(obj)
         self.addType(spec.LIST_STRING_TYPE)
-        self.addLength(_l)
-        self.con.write(struct.pack("{0}s".format(len(obj)), obj.encode("utf-8")))
+        self.addLength(len(_l) + 2 * len(obj))
+        for x in obj:
+            self.addString(x)
 
-    def readBytes(self, seek=True):
-        if seek:
-            self.con.seek(0)
-
-        return self.con.read()
+    def getBytes(self):
+        return self.con
