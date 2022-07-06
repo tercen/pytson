@@ -49,8 +49,8 @@ class DeSerializer:
         # to:do - check list length
         _len = int_struct.unpack(self.con.read(4))[0]
 
-        if _len == 0:
-            raise TsonError("Found length of zero")
+        # if _len == 0:
+        #     raise TsonError("Found length of zero")
 
         return _len
 
