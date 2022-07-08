@@ -34,16 +34,17 @@ class Serializer:
     # Add object
     def addObject(self, obj):
         # Basic types
+        # bool must come before int
         if obj is None:
             self.addNull()
         elif isinstance(obj, str):
             self.addString(obj)
-        elif isinstance(obj, int):
-            self.addInteger(obj)
         elif isinstance(obj, float):
             self.addDouble(obj)
         elif isinstance(obj, bool):
             self.addBool(obj)
+        elif isinstance(obj, int):
+            self.addInteger(obj)
 
         # Int/float lists
         elif isinstance(obj, np.ndarray):
