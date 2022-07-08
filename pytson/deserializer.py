@@ -101,7 +101,7 @@ class DeSerializer:
         return double_struct.unpack(self.con.read(8))[0]
 
     def readBool(self):
-        return type_struct.unpack(self.con.read(1))[0]
+        return type_struct.unpack(self.con.read(1))[0] > 0
 
     # Basic list
     def readList(self):
