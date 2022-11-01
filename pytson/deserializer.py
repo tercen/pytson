@@ -142,7 +142,7 @@ class DeSerializer:
                 if self.con.tell() >= (_start + l):
                     break
 
-                result.append(self.readObject())
+                result.append(self.readString())
 
         return result
 

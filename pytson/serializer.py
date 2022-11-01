@@ -106,7 +106,6 @@ class Serializer:
 
     # Integer lists
     def addIntegerList(self, obj):
-        print(obj)
         _funcDict = {
             np.dtype("int8"): lambda x: self.addIntList(x, type=spec.LIST_INT8_TYPE),
             np.dtype("uint8"): lambda x: self.addIntList(x, type=spec.LIST_UINT8_TYPE),
