@@ -57,27 +57,43 @@ class DeSerializer:
     # Add object
     def readObject(self):
         _type = self.readType()
-        _typeDict = {
-            spec.NULL_TYPE: lambda: None,
-            spec.BOOL_TYPE: self.readBool,
-            spec.INTEGER_TYPE: self.readInteger,
-            spec.DOUBLE_TYPE: self.readDouble,
-            spec.STRING_TYPE: self.readString,
-            spec.LIST_TYPE: self.readList,
-            spec.MAP_TYPE: self.readMap,
-            spec.LIST_STRING_TYPE: self.readStringList,
-            spec.LIST_UINT8_TYPE: lambda: self.readTypedIntList(np.uint8, 1),
-            spec.LIST_UINT16_TYPE: lambda: self.readTypedIntList(np.uint16, 2),
-            spec.LIST_UINT32_TYPE: lambda: self.readTypedIntList(np.uint32, 4),
-            spec.LIST_INT8_TYPE: lambda: self.readTypedIntList(np.int8, 1),
-            spec.LIST_INT16_TYPE: lambda: self.readTypedIntList(np.int16, 2),
-            spec.LIST_INT32_TYPE: lambda: self.readTypedIntList(np.int32, 4),
-            spec.LIST_INT64_TYPE: lambda: self.readTypedIntList(np.int64, 8),
-            spec.LIST_FLOAT32_TYPE: lambda: self.readTypedIntList(np.float32, 4),
-            spec.LIST_FLOAT64_TYPE: lambda: self.readTypedIntList(np.float64, 8),
-        }
 
-        return _typeDict[_type]()
+        if _type == spec.BOOL_TYPE:
+            obj = self.readBool()
+        elif _type == spec.INTEGER_TYPE:
+            obj = self.readInteger()
+        elif _type == spec.DOUBLE_TYPE:
+            obj = self.readDouble()
+        elif _type == spec.STRING_TYPE:
+            obj = self.readString()
+        elif _type == spec.LIST_TYPE:
+            obj = self.readList()
+        elif _type == spec.MAP_TYPE:
+            obj = self.readMap()
+        elif _type == spec.LIST_STRING_TYPE:
+            obj = self.readStringList()
+        elif _type == spec.LIST_UINT8_TYPE:
+            obj = self.readTypedNumList(np.uint8, 1)
+        elif _type == spec.LIST_UINT16_TYPE:
+            obj = self.readTypedNumList(np.uint16, 2)
+        elif _type == spec.LIST_UINT32_TYPE:
+            obj = self.readTypedNumList(np.uint16, 4)
+        elif _type == spec.LIST_INT8_TYPE:
+            obj = self.readTypedNumList(np.int8, 1)
+        elif _type == spec.LIST_INT16_TYPE:
+            obj = self.readTypedNumList(np.int16, 2)
+        elif _type == spec.LIST_INT32_TYPE:
+            obj = self.readTypedNumList(np.int16, 4)
+        elif _type == spec.LIST_INT64_TYPE:
+            obj = self.readTypedNumList(np.int64, 8)
+        elif _type == spec.LIST_FLOAT32_TYPE:
+            obj = self.readTypedNumList(np.float32, 4)
+        elif _type == spec.LIST_FLOAT64_TYPE:
+            obj = self.readTypedNumList(np.float64, 8)
+        else:
+            raise ValueError("List type not found.")
+
+        return obj
 
     # Basic types (null, string, integer, double, bool)
 
@@ -128,7 +144,7 @@ class DeSerializer:
 
         return _d
 
-    def readTypedIntList(self, type, size):
+    def readTypedNumList(self, type, size):
         l = self.readLength()
         return np.frombuffer(self.con.read(size * l), dtype=type)
 

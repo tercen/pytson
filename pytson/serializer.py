@@ -72,6 +72,10 @@ class Serializer:
         self.con.write(struct.pack("{0}s".format(len(obj)), obj.encode("utf-8")))
         self.addNull()
 
+    def addCString(self, obj):
+        self.con.write(struct.pack("{0}s".format(len(obj)), obj.encode("utf-8")))
+        self.addNull()
+
     def addInteger(self, obj):
         self.addType(spec.INTEGER_TYPE)
         self.con.write(struct.pack("<i", obj))
@@ -106,45 +110,41 @@ class Serializer:
 
     # Integer lists
     def addIntegerList(self, obj):
-        _funcDict = {
-            np.dtype("int8"): lambda x: self.addIntList(x, type=spec.LIST_INT8_TYPE),
-            np.dtype("uint8"): lambda x: self.addIntList(x, type=spec.LIST_UINT8_TYPE),
-            np.dtype("int16"): lambda x: self.addIntList(x, type=spec.LIST_INT16_TYPE),
-            np.dtype("uint16"): lambda x: self.addIntList(
-                x, type=spec.LIST_UINT16_TYPE
-            ),
-            np.dtype("int32"): lambda x: self.addIntList(x, type=spec.LIST_INT32_TYPE),
-            np.dtype("uint32"): lambda x: self.addIntList(
-                x, type=spec.LIST_UINT32_TYPE
-            ),
-            np.dtype("int64"): lambda x: self.addIntList(x, type=spec.LIST_INT64_TYPE),
-            np.dtype("float32"): lambda x: self.addIntList(
-                x, type=spec.LIST_FLOAT32_TYPE
-            ),
-            np.dtype("float64"): lambda x: self.addIntList(
-                x, type=spec.LIST_FLOAT64_TYPE
-            ),
-        }
-
-        f = _funcDict.get(obj.dtype, None)
-
-        if f is None:
+        if obj.dtype == np.dtype("int8"):
+            self.addTypedNumList(obj, type=spec.LIST_INT8_TYPE)
+        elif obj.dtype == np.dtype("uint8"):
+            self.addTypedNumList(obj, type=spec.LIST_UINT8_TYPE)
+        elif obj.dtype == np.dtype("uint16"):
+            self.addTypedNumList(obj, type=spec.LIST_INT16_TYPE)
+        elif obj.dtype == np.dtype("uint16"):
+            self.addTypedNumList(obj, type=spec.LIST_UINT16_TYPE)
+        elif obj.dtype == np.dtype("int32"):
+            self.addTypedNumList(obj, type=spec.LIST_INT32_TYPE)
+        elif obj.dtype == np.dtype("uint32"):
+            self.addTypedNumList(obj, type=spec.LIST_UINT32_TYPE)
+        elif obj.dtype == np.dtype("int64"):
+            self.addTypedNumList(obj, type=spec.LIST_INT64_TYPE)
+        elif obj.dtype == np.dtype("float32"):
+            self.addTypedNumList(obj, type=spec.LIST_FLOAT32_TYPE)
+        elif obj.dtype == np.dtype("flaot64"):
+            self.addTypedNumList(obj, type=spec.LIST_FLOAT64_TYPE)
+        else:
             raise ValueError("List type not found.")
 
-        f(obj)
-
-    def addIntList(self, obj, type):
+    def addTypedNumList(self, obj, type):
         _l = len(obj)
         self.addType(type)
         self.addLength(_l)
         self.con.write(obj.tobytes())
 
     def addStringList(self, obj):
-        _l = "".join(obj)
+        count_bytes = 0
+        for my_str in obj:
+            count_bytes = count_bytes + len(my_str.encode("utf-8"))
         self.addType(spec.LIST_STRING_TYPE)
-        self.addLength(len(_l) + 2 * len(obj))
+        self.addLength(count_bytes + len(obj))
         for x in obj:
-            self.addString(x)
+            self.addCString(x)
 
     def getBytes(self):
         return self.con
