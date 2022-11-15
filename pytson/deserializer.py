@@ -90,6 +90,8 @@ class DeSerializer:
             obj = self.readTypedNumList(np.float32, 4)
         elif _type == spec.LIST_FLOAT64_TYPE:
             obj = self.readTypedNumList(np.float64, 8)
+        elif _type == spec.NULL_TYPE:
+            obj = None
         else:
             raise ValueError("List type not found.")
 
