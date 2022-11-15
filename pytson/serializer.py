@@ -114,7 +114,7 @@ class Serializer:
             self.addTypedNumList(obj, type=spec.LIST_INT8_TYPE)
         elif obj.dtype == np.dtype("uint8"):
             self.addTypedNumList(obj, type=spec.LIST_UINT8_TYPE)
-        elif obj.dtype == np.dtype("uint16"):
+        elif obj.dtype == np.dtype("int16"):
             self.addTypedNumList(obj, type=spec.LIST_INT16_TYPE)
         elif obj.dtype == np.dtype("uint16"):
             self.addTypedNumList(obj, type=spec.LIST_UINT16_TYPE)
@@ -126,7 +126,7 @@ class Serializer:
             self.addTypedNumList(obj, type=spec.LIST_INT64_TYPE)
         elif obj.dtype == np.dtype("float32"):
             self.addTypedNumList(obj, type=spec.LIST_FLOAT32_TYPE)
-        elif obj.dtype == np.dtype("flaot64"):
+        elif obj.dtype == np.dtype("float64"):
             self.addTypedNumList(obj, type=spec.LIST_FLOAT64_TYPE)
         else:
             raise ValueError("List type not found.")
