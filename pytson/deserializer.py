@@ -11,7 +11,7 @@ try:
 except ImportError:
     from cStringIO import StringIO
 
-int_struct = struct.Struct("<I")
+int_struct = struct.Struct("<i")
 double_struct = struct.Struct("<d")
 type_struct = struct.Struct("<B")
 
