@@ -78,6 +78,8 @@ class DeSerializer:
             obj = self.readTypedNumList(np.uint16, 2)
         elif _type == spec.LIST_UINT32_TYPE:
             obj = self.readTypedNumList(np.uint32, 4)
+        elif _type == spec.LIST_UINT64_TYPE:
+            obj = self.readTypedNumList(np.uint64, 8)
         elif _type == spec.LIST_INT8_TYPE:
             obj = self.readTypedNumList(np.int8, 1)
         elif _type == spec.LIST_INT16_TYPE:

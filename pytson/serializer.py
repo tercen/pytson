@@ -122,6 +122,8 @@ class Serializer:
             self.addTypedNumList(obj, type=spec.LIST_INT32_TYPE)
         elif obj.dtype == np.dtype("uint32"):
             self.addTypedNumList(obj, type=spec.LIST_UINT32_TYPE)
+        elif obj.dtype == np.dtype("uint64"):
+            self.addTypedNumList(obj, type=spec.LIST_UINT64_TYPE)
         elif obj.dtype == np.dtype("int64"):
             self.addTypedNumList(obj, type=spec.LIST_INT64_TYPE)
         elif obj.dtype == np.dtype("float32"):
