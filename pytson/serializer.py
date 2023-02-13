@@ -31,35 +31,65 @@ class Serializer:
         # to:do - check list length
         self.con.write(struct.pack("<I", len))
 
+
+    def __istype(self, obj, typeList):
+        return np.any(  [isinstance(obj, t) for t in typeList ] )
+
+    def __islisttype(self, obj, typeList):
+        res = True
+
+        if len(obj) == 0:
+            res = False
+        else:
+            for o in obj:
+                res = res and np.any(  [isinstance(o, t) for t in typeList ] )
+
+        return res
+
+
+    def __listdtype(self, obj, typeList):
+        # Assumptions
+        #  1. List has been checked to ensure all ae of the same type
+        #  2. Values will only match one type within typeList
+        o = obj[0]
+
+        typeCheck = [isinstance(o, t) for t in typeList ]
+
+        res = [i for i, val in enumerate(typeCheck) if val]
+        return typeList[res[0]]
+
     # Add object
     def addObject(self, obj):
         # Basic types
         # bool must come before int
         if obj is None:
             self.addNull()
-        elif isinstance(obj, str):
-            self.addString(obj)
-        elif isinstance(obj, float):
-            self.addDouble(obj)
         elif isinstance(obj, bool):
             self.addBool(obj)
-        elif isinstance(obj, int):
+        elif self.__istype(obj, typeList=[str]):
+            self.addString(obj)
+
+        elif self.__istype(obj, typeList=[float,  np.float32, np.float64]):
+            self.addDouble(obj)
+        elif self.__istype(obj, typeList=[int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64]):
             self.addInteger(obj)
 
-        # Int/float lists
-        elif isinstance(obj, np.ndarray):
-            self.addIntegerList(obj)
-
-        # String and other lists
-        elif isinstance(obj, list):
-            if _check_list_type(obj, str):
+        # # String, Int/float and other lists
+        elif isinstance(obj, np.ndarray) or isinstance(obj, list):
+            if self.__islisttype(obj, typeList=[str]):
                 self.addStringList(obj)
+            elif self.__islisttype(obj, typeList=[float, np.float32, np.float64, int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64]):
+                if isinstance(obj, list):
+                    raise TsonError("Base Python lists are not supported for numeric arrays. Please convert to numpy array with numpy.array(list).")
+                self.addIntegerList(obj)
             else:
                 self.addList(obj)
 
+        
         # Maps
         elif isinstance(obj, dict):
             self.addMap(obj)
+
         else:
             raise TsonError("Unknown object type.")
 
@@ -110,28 +140,34 @@ class Serializer:
 
     # Integer lists
     def addIntegerList(self, obj):
-        if obj.dtype == np.dtype("int8"):
+        dtype = self.__listdtype(obj,[float, np.float32, np.float64, int, np.int8, np.int16, 
+                    np.int32, np.int64, np.uint, np.uint8, 
+                    np.uint16, np.uint32, np.uint64] )
+
+
+
+        if dtype == np.dtype("int8"):
             self.addTypedNumList(obj, type=spec.LIST_INT8_TYPE)
-        elif obj.dtype == np.dtype("uint8"):
+        elif dtype == np.dtype("uint8"):
             self.addTypedNumList(obj, type=spec.LIST_UINT8_TYPE)
-        elif obj.dtype == np.dtype("int16"):
+        elif dtype == np.dtype("int16"):
             self.addTypedNumList(obj, type=spec.LIST_INT16_TYPE)
-        elif obj.dtype == np.dtype("uint16"):
+        elif dtype == np.dtype("uint16"):
             self.addTypedNumList(obj, type=spec.LIST_UINT16_TYPE)
-        elif obj.dtype == np.dtype("int32"):
+        elif dtype == np.dtype("int32")  or dtype == int:
             self.addTypedNumList(obj, type=spec.LIST_INT32_TYPE)
-        elif obj.dtype == np.dtype("uint32"):
+        elif dtype == np.dtype("uint32"):
             self.addTypedNumList(obj, type=spec.LIST_UINT32_TYPE)
-        elif obj.dtype == np.dtype("uint64"):
-            self.addTypedNumList(obj, type=spec.LIST_UINT64_TYPE)
-        elif obj.dtype == np.dtype("int64"):
+        elif dtype == np.dtype("int64"):
             self.addTypedNumList(obj, type=spec.LIST_INT64_TYPE)
-        elif obj.dtype == np.dtype("float32"):
+        elif dtype == np.dtype("uint64"):
+            self.addTypedNumList(obj, type=spec.LIST_UINT64_TYPE)
+        elif dtype == np.dtype("float32"):
             self.addTypedNumList(obj, type=spec.LIST_FLOAT32_TYPE)
-        elif obj.dtype == np.dtype("float64"):
+        elif dtype == np.dtype("float64") or dtype == float:
             self.addTypedNumList(obj, type=spec.LIST_FLOAT64_TYPE)
         else:
-            raise ValueError("List type not found.")
+            raise ValueError("List type " + str(dtype) + " not found.")
 
     def addTypedNumList(self, obj, type):
         _l = len(obj)
