@@ -41,9 +41,7 @@ class Serializer:
         if len(obj) == 0:
             res = False
         else:
-            for o in obj:
-                res = res and np.any(  [isinstance(o, t) for t in typeList ] )
-                break
+            res = all([isinstance(o,tuple(typeList)) for o in obj])
 
         return res
 
