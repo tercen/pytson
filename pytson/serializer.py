@@ -43,6 +43,7 @@ class Serializer:
         else:
             for o in obj:
                 res = res and np.any(  [isinstance(o, t) for t in typeList ] )
+                break
 
         return res
 

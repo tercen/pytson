@@ -3,6 +3,6 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='pytson', version='1.6.1',
+    name='pytson', version='1.6.2',
     packages=find_packages(),
 )
