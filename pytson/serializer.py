@@ -10,13 +10,394 @@ try:
 except ImportError:
     from cStringIO import StringIO
 
+STRING_LIST=0
+NUMERIC_LIST=1
+MIXED_LIST=2
 
-def _check_list_type(l, _type):
-    if len(l) == 0:
-        return False
 
-    return all(isinstance(i, _type) for i in l)
+class SerializerIt:
+    def addTsonSpec(self):
+        self.addString(spec.TSON_SPEC_VERSION)
 
+    def __init__(self, con=io.BytesIO()):
+        self.con = con
+
+    def addType(self, spec_type):
+        self.con.write(struct.pack("<B", spec_type))
+
+    def addLength(self, length):
+        # to:do - check list length
+        self.con.write(struct.pack("<I", length))
+
+
+
+    def __listdtype(self, obj, typeList):
+        # Assumptions
+        #  1. List has been checked to ensure all ae of the same type
+        #  2. Values will only match one type within typeList
+        o = obj[0]
+
+        typeCheck = [isinstance(o, t) for t in typeList ]
+
+        res = [i for i, val in enumerate(typeCheck) if val]
+        return typeList[res[0]]
+
+
+            
+
+    # Basic types (null, string, integer, double, bool)
+    def addNull(self):
+        self.addType(spec.NULL_TYPE)
+        return self.con.tell()
+
+    def addString(self, obj):
+        self.addType(spec.STRING_TYPE)
+        
+        self.con.write(struct.pack("{0}s".format(len(obj)), obj.encode("utf-8")))
+        self.addNull()
+
+        return self.con.tell()
+
+    def addCString(self, obj):
+        self.con.write(struct.pack("{0}s".format(len(obj)), obj.encode("utf-8")))
+        self.addNull()
+        return self.con.tell()
+
+    def addInteger(self, obj):
+        self.addType(spec.INTEGER_TYPE)
+        self.con.write(struct.pack("<i", obj))
+        return self.con.tell()
+
+    def addDouble(self, obj):
+        self.addType(spec.DOUBLE_TYPE)
+        self.con.write(struct.pack("<d", obj))
+        return self.con.tell()
+
+    def addBool(self, obj):
+        self.addType(spec.BOOL_TYPE)
+        self.con.write(struct.pack("<B", obj))
+        return self.con.tell()
+
+    # Basic list
+    def addListHead(self, l):
+        self.addType(spec.LIST_TYPE)
+        self.addLength(len(l))
+
+
+    # Basic map
+    def addMapHead(self, m):
+        self.addType(spec.MAP_TYPE)
+        self.addLength(len(m))
+
+
+    
+    # Integer lists
+    def addIntegerListHead(self, obj):
+        # __istype(self, obj, typeList):
+        dtype = self.__listdtype(obj,[float, np.float32, np.float64, int, np.int8, np.int16, 
+                    np.int32, np.int64, np.uint, np.uint8, 
+                    np.uint16, np.uint32, np.uint64] )
+
+
+
+        if dtype == np.dtype("int8"):
+            self.addTypedNumList(obj, type=spec.LIST_INT8_TYPE)
+        elif dtype == np.dtype("uint8"):
+            self.addTypedNumList(obj, type=spec.LIST_UINT8_TYPE)
+        elif dtype == np.dtype("int16"):
+            self.addTypedNumList(obj, type=spec.LIST_INT16_TYPE)
+        elif dtype == np.dtype("uint16"):
+            self.addTypedNumList(obj, type=spec.LIST_UINT16_TYPE)
+        elif dtype == np.dtype("int32")  or dtype == int:
+            self.addTypedNumList(obj, type=spec.LIST_INT32_TYPE)
+        elif dtype == np.dtype("uint32"):
+            self.addTypedNumList(obj, type=spec.LIST_UINT32_TYPE)
+        elif dtype == np.dtype("int64"):
+            self.addTypedNumList(obj, type=spec.LIST_INT64_TYPE)
+        elif dtype == np.dtype("uint64"):
+            self.addTypedNumList(obj, type=LIST_UINT64_TYPE)
+        elif dtype == np.dtype("float32"):
+            self.addTypedNumList(obj, type=spec.LIST_FLOAT32_TYPE)
+        elif dtype == np.dtype("float64") or dtype == float:
+            self.addTypedNumList(obj, type=spec.LIST_FLOAT64_TYPE)
+        else:
+            raise ValueError("List type " + str(dtype) + " not found.")
+
+    def addTypedNumList(self, obj, type):
+        _l = len(obj)
+        self.addType(type)
+        self.addLength(_l)
+
+        # self.con.write(obj.tobytes())
+
+    def addChunkedNumericArray(self, obj, chunkSize, currentWritten=0, startIndex=0):
+        bytesWritten = currentWritten
+
+        idx = startIndex
+        lObj = len(obj)
+        while idx < lObj:
+            bytesWritten = bytesWritten + self.con.write(obj[idx].tobytes())
+
+            idx = idx + 1
+            if bytesWritten >= chunkSize:
+                break
+
+        if idx >= len(obj):
+            idx = -1
+        return [self.con.tell(), idx]
+
+    def addChunkedStringArray(self, obj, chunkSize, currentWritten=0, startIndex=0):
+        bytesWritten = currentWritten
+        idx = startIndex
+        lObj = len(obj)
+        while idx < lObj:
+            nB1 = self.getSize()
+            nB2 = self.addCString(obj[idx])
+
+            bytesWritten = bytesWritten + (nB2-nB1)
+            idx = idx + 1
+
+
+            if bytesWritten >= chunkSize:
+                break
+
+        if idx >= len(obj):
+            idx = -1
+        return [self.con.tell(), idx]
+
+
+
+    def addStringListHead(self, obj):
+        count_bytes = 0
+        for my_str in obj:
+            count_bytes = count_bytes + len(my_str.encode("utf-8"))
+        self.addType(spec.LIST_STRING_TYPE)
+        self.addLength(count_bytes + len(obj))
+
+
+    def getBytes(self):
+        return self.con.getvalue()
+
+    def clear(self):
+        self.con.truncate(0)
+        self.con.seek(0)
+
+    def getSize(self):
+        return self.con.tell()
+
+class SerializerJsonIterator:
+    def __init__(self, jsonData, chunkSize=8*1024):
+        # NOTE Encoding speed was nearly indifferent to chunkSize for simple json files with large arrays (>1M) when tested between 1kb up to 32mb chunk sizes
+
+        self.isMainDict = True
+        self.jsonData = list([list(jsonData.values())])
+
+        self.keys = list([list(jsonData.keys())])
+
+        self.buffer = io.BytesIO
+        self.currentKey = 0
+
+        self.longArray = False
+        self.level = 0
+        self.arrayIdx = [0] # Has to be array so that we handle lists within generic lists
+        self.addingIntegerArray = False
+        self.addingStringArray = False
+
+        self.chunkedIndex = 0
+        
+        self.array = None
+        
+        
+        self.serializer = SerializerIt()
+        self.serializer.addTsonSpec()
+        self.serializer.addMapHead(jsonData)
+
+        self.maxChunk = chunkSize
+        self.bytesWritten = 0
+
+
+
+    def __listtype(self, obj):
+        currType = None
+        prevType = None
+
+        if len(obj) == 0:
+            return MIXED_LIST        
+        elif isinstance(obj[0], str):
+            listType = STRING_LIST
+        elif isinstance(obj[0], (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
+            listType = NUMERIC_LIST
+        else:
+            return MIXED_LIST
+
+
+        for o in obj:
+            if prevType is None:
+                prevType = o.__class__
+                continue
+            
+            currType = o.__class__
+
+            if prevType != currType:
+                return MIXED_LIST
+        
+        return listType
+            
+
+
+
+    def isAddingArray(self):
+        return self.addingIntegerArray or self.addingStringArray
+
+    def __iter__(self):
+        return self
+
+    # see https://github.com/pyutils/line_profiler
+    # @profile
+    def __next__(self):
+         
+        while True:
+            notAddingArray = self.addingIntegerArray ==False and  self.addingStringArray == False
+            if notAddingArray:
+
+                numObjs = len(self.keys[self.level][:])
+                idx = self.arrayIdx[self.level]
+
+                while idx >= numObjs :
+                    self.level= self.level -1
+                    if self.level <= -1:
+                        break
+
+                    numObjs = len(self.keys[self.level][:])
+                    idx = self.arrayIdx[self.level]
+
+                if self.level <= -1: 
+                    if self.serializer.getSize() > 0:
+                        bts = self.serializer.getBytes()
+                        self.serializer.clear()
+                        return bts
+                    else:
+                        raise StopIteration
+                
+                self.arrayIdx[self.level] = self.arrayIdx[self.level] + 1
+
+                key = self.keys[self.level][idx]
+
+
+                if key != "@@NOKEY@@":
+                    self.serializer.addString(key)
+
+                obj = self.jsonData[self.level][idx]
+
+
+            else:
+                obj = self.array
+             
+            if obj is None and notAddingArray:
+                self.bytesWritten = self.bytesWritten + self.serializer.addNull()
+            elif isinstance(obj, bool ) and notAddingArray:
+                self.bytesWritten = self.bytesWritten + self.serializer.addBool(obj)
+            elif isinstance(obj, str) and notAddingArray:
+                self.bytesWritten = self.bytesWritten + self.serializer.addString(obj)
+
+            elif isinstance(obj, (float,  np.float32, np.float64)) and notAddingArray:
+                self.bytesWritten = self.bytesWritten + self.serializer.addDouble(obj)
+            elif isinstance(obj, (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64)) and notAddingArray:
+                self.bytesWritten = self.bytesWritten + self.serializer.addInteger(obj)
+
+            # # # String, Int/float and other lists
+            elif isinstance(obj, np.ndarray) or isinstance(obj, list):
+                if notAddingArray:
+                    listType = self.__listtype(obj)
+                else:
+                    listType = None
+                # if self.__islisttype(obj, typeList=[str]):
+                if self.addingStringArray or listType == STRING_LIST:
+                    
+                    if not self.addingStringArray:
+                        self.serializer.addStringListHead(obj)
+
+                    
+                    res = self.serializer.addChunkedStringArray(obj,  self.maxChunk, self.bytesWritten, self.chunkedIndex)
+                    self.bytesWritten = self.bytesWritten + res[0]
+                    # obj = res[1]
+                    
+                    
+
+                    if res[1] >= 0:
+                        # There is still more to add
+                        self.addingStringArray = True
+                        self.array = obj
+                        self.chunkedIndex = res[1]
+                    else:
+                        self.addingStringArray = False
+                        self.array = None
+                        self.chunkedIndex = 0
+
+                elif self.addingIntegerArray or listType == NUMERIC_LIST:
+                    if isinstance(obj, list):
+                        raise TsonError("Base Python lists are not supported for numeric arrays. Please convert to numpy array with numpy.array(list).")
+                    if not self.addingIntegerArray:
+                        self.serializer.addIntegerListHead(obj)
+                    
+
+                    res = self.serializer.addChunkedNumericArray(obj,  self.maxChunk, self.bytesWritten, self.chunkedIndex)
+                    self.bytesWritten = self.bytesWritten + res[0]
+
+                    if res[1] >= 0:
+                        # There is still more to add
+                        self.addingIntegerArray = True
+                        self.array = obj
+                        self.chunkedIndex = res[1]
+                    else:
+                        self.addingIntegerArray = False
+                        self.array = None
+                        self.chunkedIndex = 0
+
+
+                else:
+                    self.serializer.addListHead(obj)
+
+                    for k in np.arange(len(obj)-1, -1, -1):
+                        o = obj[k]
+                        self.jsonData[self.level].insert(self.arrayIdx[self.level], o)
+                        self.keys[self.level].insert(self.arrayIdx[self.level],"@@NOKEY@@")
+
+            # # Maps
+            elif isinstance(obj, dict):
+                self.level = self.level + 1
+
+                if self.level >= len(self.arrayIdx):
+                    self.arrayIdx.append(0)
+                else:
+                    # Level was previously reached, so we overwrite the data
+                    self.arrayIdx[self.level] = 0
+
+                self.serializer.addMapHead(obj)
+                keys = list(obj.keys())
+
+                if self.level >= len(self.keys):
+                    self.keys.append(keys)
+                    self.jsonData.append(list(obj.values()))
+                else:
+                    self.keys[self.level] = keys
+                    self.jsonData[self.level] = list(obj.values())
+
+
+                continue
+
+            else:
+                raise TsonError("Unknown object type.")
+
+
+
+            if self.bytesWritten   > self.maxChunk:
+                bts = self.serializer.getBytes()
+                self.serializer.clear()
+                self.bytesWritten = 0
+                return bts
+            else:
+                continue
 
 class Serializer:
     def __init__(self, obj, con=None):
