@@ -16,11 +16,6 @@ double_struct = struct.Struct("<d")
 type_struct = struct.Struct("<B")
 
 
-def _check_list_type(l, _type):
-    if len(l) == 0:
-        return False
-
-    return all(isinstance(i, _type) for i in l)
 
 
 class DeSerializer:
