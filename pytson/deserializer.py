@@ -25,6 +25,7 @@ class DeSerializer:
             raise TsonError("Connection buffer is empty.")
 
         self.con = con
+        # self.bytesRead = 0 # Control this because HTTPResponse has no tell() or seek() methods
 
         version = self.readObject()
 
@@ -58,7 +59,7 @@ class DeSerializer:
         elif _type == spec.DOUBLE_TYPE:
             obj = self.readDouble()
         elif _type == spec.STRING_TYPE:
-            obj = self.readString()
+            obj = self.readString()[0]
         elif _type == spec.LIST_TYPE:
             obj = self.readList()
         elif _type == spec.MAP_TYPE:
@@ -71,8 +72,6 @@ class DeSerializer:
             obj = self.readTypedNumList(np.uint16, 2)
         elif _type == spec.LIST_UINT32_TYPE:
             obj = self.readTypedNumList(np.uint32, 4)
-        elif _type == spec.LIST_UINT64_TYPE:
-            obj = self.readTypedNumList(np.uint64, 8)
         elif _type == spec.LIST_INT8_TYPE:
             obj = self.readTypedNumList(np.int8, 1)
         elif _type == spec.LIST_INT16_TYPE:
@@ -88,7 +87,7 @@ class DeSerializer:
         elif _type == spec.NULL_TYPE:
             obj = None
         else:
-            raise ValueError("List type not found.")
+            raise ValueError("List type not found.") # 75
 
         return obj
 
@@ -96,15 +95,18 @@ class DeSerializer:
 
     def readString(self):
         r = []
+        bytesRead = 0
         while True:
             b = self.con.read(1)
             # print(r, b)
             if b == b"\x00":
                 break
-
+            
+            
+            bytesRead = bytesRead + len(b)
             r.append(b.decode("utf-8"))
 
-        return "".join(r)
+        return ["".join(r), bytesRead+1]
         # return "".join([x.decode("utf-8") for x in i])
 
     def readInteger(self):
@@ -148,14 +150,20 @@ class DeSerializer:
     def readStringList(self):
         l = self.readLength()
         result = []
+        self.con
         # _start = self.con.tell()
+        bytesRead = 0
 
         if l > 0:
             for _ in range(l):
                 # if self.con.tell() >= (_start + l):
-                #     break
+                if bytesRead >=  l:
+                    break
 
-                result.append(self.readString())
+                readRes = self.readString()
+                # result.append(self.readString())
+                result.append(readRes[0])
+                bytesRead = bytesRead + readRes[1]
 
         return result
 
