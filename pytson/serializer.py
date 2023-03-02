@@ -5,7 +5,7 @@ from pytson.error import TsonError
 
 # support for py2.x and py3.x+
 # most likely we should just drop py2.x at all
-
+import io
 from io import BytesIO as StringIO
 
 STRING_LIST=0
