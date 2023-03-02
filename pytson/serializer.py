@@ -5,10 +5,8 @@ from pytson.error import TsonError
 
 # support for py2.x and py3.x+
 # most likely we should just drop py2.x at all
-try:
-    from io import BytesIO as StringIO
-except ImportError:
-    from cStringIO import StringIO
+
+from io import BytesIO as StringIO
 
 STRING_LIST=0
 NUMERIC_LIST=1
@@ -115,7 +113,7 @@ class SerializerIt:
         elif dtype == np.dtype("int64"):
             self.addTypedNumList(obj, type=spec.LIST_INT64_TYPE)
         elif dtype == np.dtype("uint64"):
-            self.addTypedNumList(obj, type=LIST_UINT64_TYPE)
+            self.addTypedNumList(obj, type=spec.LIST_UINT64_TYPE)
         elif dtype == np.dtype("float32"):
             self.addTypedNumList(obj, type=spec.LIST_FLOAT32_TYPE)
         elif dtype == np.dtype("float64") or dtype == float:

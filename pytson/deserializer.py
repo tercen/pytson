@@ -6,10 +6,8 @@ import sys
 
 # support for py2.x and py3.x+
 # most likely we should just drop py2.x at all
-try:
-    from io import BytesIO as StringIO
-except ImportError:
-    from cStringIO import StringIO
+from io import BytesIO as StringIO
+
 
 int_struct = struct.Struct("<i")
 double_struct = struct.Struct("<d")
