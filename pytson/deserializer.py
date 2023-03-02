@@ -148,12 +148,12 @@ class DeSerializer:
     def readStringList(self):
         l = self.readLength()
         result = []
-        _start = self.con.tell()
+        # _start = self.con.tell()
 
         if l > 0:
             for _ in range(l):
-                if self.con.tell() >= (_start + l):
-                    break
+                # if self.con.tell() >= (_start + l):
+                #     break
 
                 result.append(self.readString())
 

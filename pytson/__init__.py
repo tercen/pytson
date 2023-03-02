@@ -4,4 +4,4 @@ from pytson.deserializer import DeSerializer
 from .pytson import encodeTSON, decodeTSON
 
 # Define version
-__version__ = "1.7.4"
+__version__ = "1.7.5"
