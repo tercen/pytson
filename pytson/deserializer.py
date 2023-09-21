@@ -104,7 +104,7 @@ class DeSerializer:
             
             
             bytesRead = bytesRead + len(b)
-            r.append(b.decode("utf-8"))
+            r.append(b.decode("utf-8", "ignore"))
 
         return ["".join(r), bytesRead+1]
         # return "".join([x.decode("utf-8") for x in i])
