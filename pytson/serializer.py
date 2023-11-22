@@ -11,6 +11,7 @@ from io import BytesIO as StringIO
 STRING_LIST=0
 NUMERIC_LIST=1
 MIXED_LIST=2
+MIXED_NUMERIC_LIST=3
 
 
 class SerializerIt:
@@ -19,6 +20,7 @@ class SerializerIt:
 
     def __init__(self, con=io.BytesIO()):
         self.con = con
+        self.numListType = None
 
     def addType(self, spec_type):
         self.con.write(struct.pack("<B", spec_type))
@@ -100,23 +102,32 @@ class SerializerIt:
 
         if dtype == np.dtype("int8"):
             self.addTypedNumList(obj, type=spec.LIST_INT8_TYPE)
+            self.numListType = 1
         elif dtype == np.dtype("uint8"):
             self.addTypedNumList(obj, type=spec.LIST_UINT8_TYPE)
         elif dtype == np.dtype("int16"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_INT16_TYPE)
         elif dtype == np.dtype("uint16"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_UINT16_TYPE)
         elif dtype == np.dtype("int32")  or dtype == int:
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_INT32_TYPE)
         elif dtype == np.dtype("uint32"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_UINT32_TYPE)
         elif dtype == np.dtype("int64"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_INT64_TYPE)
         elif dtype == np.dtype("uint64"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_UINT64_TYPE)
         elif dtype == np.dtype("float32"):
+            self.numListType = 2
             self.addTypedNumList(obj, type=spec.LIST_FLOAT32_TYPE)
         elif dtype == np.dtype("float64") or dtype == float:
+            self.numListType = 2
             self.addTypedNumList(obj, type=spec.LIST_FLOAT64_TYPE)
         else:
             raise ValueError("List type " + str(dtype) + " not found.")
@@ -133,8 +144,19 @@ class SerializerIt:
 
         idx = startIndex
         lObj = len(obj)
+
+        # arr[0].tobytes()
         while idx < lObj:
-            bytesWritten = bytesWritten + self.con.write(obj[idx].tobytes())
+            try:
+                bytesWritten = bytesWritten + self.con.write(obj[idx].tobytes())
+            except:
+                # Base python list
+                if self.numListType == 1:
+                    self.con.write(struct.pack("<i", obj[idx]))
+                    bytesWritten = bytesWritten + self.con.tell()
+                else:
+                    self.con.write(struct.pack("<d", obj[idx]))
+                    bytesWritten = bytesWritten + self.con.tell()
 
             idx = idx + 1
             if bytesWritten >= chunkSize:
@@ -237,7 +259,10 @@ class SerializerJsonIterator:
             currType = o.__class__
 
             if prevType != currType:
-                return MIXED_LIST
+                if listType == NUMERIC_LIST and isinstance(o, (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
+                    return MIXED_NUMERIC_LIST
+                else:
+                    return MIXED_LIST
         
         return listType
             
@@ -311,7 +336,6 @@ class SerializerJsonIterator:
                     listType = None
                 # if self.__islisttype(obj, typeList=[str]):
                 if self.addingStringArray or listType == STRING_LIST:
-                    
                     if not self.addingStringArray:
                         self.serializer.addStringListHead(obj)
 
@@ -332,11 +356,17 @@ class SerializerJsonIterator:
                         self.array = None
                         self.chunkedIndex = 0
 
-                elif self.addingIntegerArray or listType == NUMERIC_LIST:
-                    if isinstance(obj, list):
-                        raise TsonError("Base Python lists are not supported for numeric arrays. Please convert to numpy array with numpy.array(list).")
+                elif self.addingIntegerArray or listType == NUMERIC_LIST or listType == MIXED_NUMERIC_LIST:
+                    # if isinstance(obj, list):
+                        # Converts
+                        # pass
+                        # raise TsonError("Base Python lists are not supported for numeric arrays. Please convert to numpy array with numpy.array(list).")
                     if not self.addingIntegerArray:
+                        if listType == MIXED_NUMERIC_LIST:
+                            # Upcasts the list to float
+                            obj = [float(i) for i in obj]
                         self.serializer.addIntegerListHead(obj)
+
                     
 
                     res = self.serializer.addChunkedNumericArray(obj,  self.maxChunk, self.bytesWritten, self.chunkedIndex)
@@ -400,17 +430,20 @@ class SerializerJsonIterator:
 class Serializer:
     def __init__(self, obj, con=None):
         self.con = con or StringIO()
+
         self.addString(spec.TSON_SPEC_VERSION)
         self.addObject(obj)
+
 
     def addType(self, spec_type):
         self.con.write(struct.pack("<B", spec_type))
 
-    def addLength(self, len):
+    def addLength(self, length):
         # to:do - check list length
-        self.con.write(struct.pack("<I", len))
+        self.con.write(struct.pack("<I", length))
 
 
+    # Add object
     def __istype(self, obj, typeList):
         return np.any(  [isinstance(obj, t) for t in typeList ] )
 
@@ -435,11 +468,47 @@ class Serializer:
 
         res = [i for i, val in enumerate(typeCheck) if val]
         return typeList[res[0]]
+    
+    def __listtype(self, obj):
+        currType = None
+        prevType = None
 
-    # Add object
+        if len(obj) == 0:
+            return MIXED_LIST        
+        elif isinstance(obj[0], str):
+            listType = STRING_LIST
+        elif isinstance(obj[0], (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
+            listType = NUMERIC_LIST
+        else:
+            return MIXED_LIST
+
+
+        for o in obj:
+            if prevType is None:
+                prevType = o.__class__
+                continue
+            
+            currType = o.__class__
+
+            if prevType != currType:
+                if listType == NUMERIC_LIST and isinstance(o, (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
+                    return MIXED_NUMERIC_LIST
+                else:
+                    return MIXED_LIST
+        
+        return listType
+
+            
+        #'test', False, '2035'
     def addObject(self, obj):
         # Basic types
         # bool must come before int
+
+        # If not yet instantiated, do so
+        # if isinstance(obj, types.GeneratorType):
+            # obj = next(obj)
+
+
         if obj is None:
             self.addNull()
         elif isinstance(obj, bool):
@@ -454,11 +523,16 @@ class Serializer:
 
         # # String, Int/float and other lists
         elif isinstance(obj, np.ndarray) or isinstance(obj, list):
-            if self.__islisttype(obj, typeList=[str]):
+            listType = self.__listtype(obj)
+
+            if listType == STRING_LIST:#self.__islisttype(obj, typeList=[str]):
                 self.addStringList(obj)
-            elif self.__islisttype(obj, typeList=[float, np.float32, np.float64, int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64]):
-                if isinstance(obj, list):
-                    raise TsonError("Base Python lists are not supported for numeric arrays. Please convert to numpy array with numpy.array(list).")
+            elif listType == NUMERIC_LIST or listType == MIXED_NUMERIC_LIST:#self.__islisttype(obj, typeList=[float, np.float32, np.float64, int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64]):
+                # if isinstance(obj, list):
+                if listType == MIXED_NUMERIC_LIST:
+                    # Upcasts the list to float
+                    obj = [float(i) for i in obj]
+                    # raise TsonError("Base Python lists are not supported for numeric arrays. Please convert to numpy array with numpy.array(list).")
                 self.addIntegerList(obj)
             else:
                 self.addList(obj)
@@ -477,6 +551,7 @@ class Serializer:
 
     def addString(self, obj):
         self.addType(spec.STRING_TYPE)
+        
         self.con.write(struct.pack("{0}s".format(len(obj)), obj.encode("utf-8")))
         self.addNull()
 
@@ -509,15 +584,29 @@ class Serializer:
         self.addType(spec.MAP_TYPE)
         self.addLength(len(m))
 
+        
         for k, v in m.items():
-            if not (isinstance(k, str)):
+            if  not k is None and not (isinstance(k, str)) and len(k) != 0:
                 raise TsonError("Map key must be a String.")
 
-            self.addObject(k)
+            self.addString(k)
             self.addObject(v)
 
+    def addMapThreaded(self, m):
+        self.addType(spec.MAP_TYPE)
+        self.addLength(len(m))
+
+        for k, v in m.items():
+            if  not k is None and not (isinstance(k, str)) and len(k) != 0:
+                raise TsonError("Map key must be a String.")
+
+            self.addString(k)
+            self.addObjectThreaded(v)
+    
+    
     # Integer lists
     def addIntegerList(self, obj):
+        # __istype(self, obj, typeList):
         dtype = self.__listdtype(obj,[float, np.float32, np.float64, int, np.int8, np.int16, 
                     np.int32, np.int64, np.uint, np.uint8, 
                     np.uint16, np.uint32, np.uint64] )
@@ -525,24 +614,41 @@ class Serializer:
 
 
         if dtype == np.dtype("int8"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_INT8_TYPE)
+            
         elif dtype == np.dtype("uint8"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_UINT8_TYPE)
+            
         elif dtype == np.dtype("int16"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_INT16_TYPE)
+            
         elif dtype == np.dtype("uint16"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_UINT16_TYPE)
+            
         elif dtype == np.dtype("int32")  or dtype == int:
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_INT32_TYPE)
+            
         elif dtype == np.dtype("uint32"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_UINT32_TYPE)
+            
         elif dtype == np.dtype("int64"):
+            self.numListType = 1
             self.addTypedNumList(obj, type=spec.LIST_INT64_TYPE)
+            
         elif dtype == np.dtype("uint64"):
-            self.addTypedNumList(obj, type=spec.LIST_UINT64_TYPE)
+            self.numListType = 1
+            self.addTypedNumList(obj, type=LIST_UINT64_TYPE)
         elif dtype == np.dtype("float32"):
+            self.numListType = 2
             self.addTypedNumList(obj, type=spec.LIST_FLOAT32_TYPE)
         elif dtype == np.dtype("float64") or dtype == float:
+            self.numListType = 2
             self.addTypedNumList(obj, type=spec.LIST_FLOAT64_TYPE)
         else:
             raise ValueError("List type " + str(dtype) + " not found.")
@@ -551,7 +657,24 @@ class Serializer:
         _l = len(obj)
         self.addType(type)
         self.addLength(_l)
-        self.con.write(obj.tobytes())
+
+
+        try:
+            # bytesWritten = bytesWritten + self.con.write(obj[idx].tobytes())
+            self.con.write(obj.tobytes())
+        except:
+            # Base python list
+            if self.numListType == 1:
+                for o in obj:
+                    self.con.write(struct.pack("<i", o))
+                # bytesWritten = bytesWritten + self.con.tell()
+            else:
+                for o in obj:
+                    self.con.write(struct.pack("<d", o))
+        # self.con.write(obj.tobytes())
+
+
+
 
     def addStringList(self, obj):
         count_bytes = 0

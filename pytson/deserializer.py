@@ -14,8 +14,6 @@ double_struct = struct.Struct("<d")
 type_struct = struct.Struct("<B")
 
 
-
-
 class DeSerializer:
     def __init__(self, con):
         if con is None:
@@ -104,7 +102,7 @@ class DeSerializer:
             
             
             bytesRead = bytesRead + len(b)
-            r.append(b.decode("utf-8", "ignore"))
+            r.append(b.decode("utf-8"))
 
         return ["".join(r), bytesRead+1]
         # return "".join([x.decode("utf-8") for x in i])
