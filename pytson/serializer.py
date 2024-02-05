@@ -213,6 +213,7 @@ class SerializerJsonIterator:
         self.jsonData = list([list(jsonData.values())])
 
         self.keys = list([list(jsonData.keys())])
+        self.numObjs = {}
 
         self.buffer = io.BytesIO
         self.currentKey = 0
@@ -226,6 +227,8 @@ class SerializerJsonIterator:
         self.chunkedIndex = 0
         
         self.array = None
+
+        # self.mode = mode
         
         
         self.serializer = SerializerIt()
@@ -275,23 +278,30 @@ class SerializerJsonIterator:
     def __iter__(self):
         return self
 
-    # see https://github.com/pyutils/line_profiler
+    # from line_profiler import profile
     # @profile
     def __next__(self):
          
         while True:
-            notAddingArray = self.addingIntegerArray ==False and  self.addingStringArray == False
+            notAddingArray = self.addingIntegerArray == False and self.addingStringArray == False
             if notAddingArray:
 
-                numObjs = len(self.keys[self.level][:])
+                if not self.level in self.numObjs:
+                    self.numObjs[self.level] = len(self.keys[self.level][:])
+                
+                n = self.numObjs[self.level]
                 idx = self.arrayIdx[self.level]
 
-                while idx >= numObjs :
+                while idx >= n:
                     self.level= self.level -1
                     if self.level <= -1:
                         break
 
-                    numObjs = len(self.keys[self.level][:])
+                    # numObjs = len(self.keys[self.level][:])
+                    if not self.level in self.numObjs:
+                        self.numObjs[self.level] = len(self.keys[self.level][:])
+                    
+                    n = self.numObjs[self.level]
                     idx = self.arrayIdx[self.level]
 
                 if self.level <= -1: 
@@ -643,7 +653,7 @@ class Serializer:
             
         elif dtype == np.dtype("uint64"):
             self.numListType = 1
-            self.addTypedNumList(obj, type=LIST_UINT64_TYPE)
+            self.addTypedNumList(obj, type=spec.LIST_UINT64_TYPE)
         elif dtype == np.dtype("float32"):
             self.numListType = 2
             self.addTypedNumList(obj, type=spec.LIST_FLOAT32_TYPE)
