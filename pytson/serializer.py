@@ -233,8 +233,7 @@ class SerializerJsonIterator:
         self.chunkedIndex = 0
         
         self.array = None
-
-      
+     
         
         self.serializer = SerializerIt()
         self.serializer.addTsonSpec()
@@ -258,16 +257,19 @@ class SerializerJsonIterator:
         else:
             return MIXED_LIST
 
-        baseClass = obj[0].__class__
-        z = [isinstance(o, baseClass) != baseClass for o in obj]
-        classComp = list(compress(range(len(z)), z))
 
-        if len(classComp) > 0:
-            if listType == NUMERIC_LIST and isinstance(obj[classComp[0]], (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
-                return MIXED_NUMERIC_LIST
-            else:
-                return MIXED_LIST
+        for o in obj:
+            if prevType is None:
+                prevType = o.__class__
+                continue
 
+            currType = o.__class__
+
+            if prevType != currType:
+                if listType == NUMERIC_LIST and isinstance(o, (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
+                    return MIXED_NUMERIC_LIST
+                else:
+                    return MIXED_LIST
         
         return listType
             
