@@ -1,7 +1,9 @@
-import struct
+import struct, math
 import numpy as np
 import pytson.spec as spec
 from pytson.error import TsonError
+# from line_profiler import profile
+from itertools import compress
 
 # support for py2.x and py3.x+
 # most likely we should just drop py2.x at all
@@ -12,6 +14,8 @@ STRING_LIST=0
 NUMERIC_LIST=1
 MIXED_LIST=2
 MIXED_NUMERIC_LIST=3
+
+
 
 
 class SerializerIt:
@@ -139,29 +143,33 @@ class SerializerIt:
 
         # self.con.write(obj.tobytes())
 
+
+
+    
+    # @profile
     def addChunkedNumericArray(self, obj, chunkSize, currentWritten=0, startIndex=0):
         bytesWritten = currentWritten
 
         idx = startIndex
         lObj = len(obj)
 
-        # arr[0].tobytes()
-        while idx < lObj:
-            try:
+        isBaseList = type(obj) == list
+        if not isBaseList:
+            while idx < lObj:
                 bytesWritten = bytesWritten + self.con.write(obj[idx].tobytes())
-            except:
+                idx = idx + 1
+                if bytesWritten >= chunkSize:
+                    break
+        else:
+            while idx < lObj and bytesWritten < chunkSize:
                 # Base python list
                 if self.numListType == 1:
-                    self.con.write(struct.pack("<i", obj[idx]))
-                    bytesWritten = bytesWritten + self.con.tell()
+                    bytesWritten = bytesWritten + self.con.write(struct.pack("<i", obj[idx]))
                 else:
-                    self.con.write(struct.pack("<d", obj[idx]))
-                    bytesWritten = bytesWritten + self.con.tell()
+                    bytesWritten = bytesWritten + self.con.write(struct.pack("<d", obj[idx]))
+                idx = idx + 1
 
-            idx = idx + 1
-            if bytesWritten >= chunkSize:
-                break
-
+            
         if idx >= len(obj):
             idx = -1
         return [self.con.tell(), idx]
@@ -207,8 +215,6 @@ class SerializerIt:
 
 class SerializerJsonIterator:
     def __init__(self, jsonData, chunkSize=8*1024):
-        # NOTE Encoding speed was nearly indifferent to chunkSize for simple json files with large arrays (>1M) when tested between 1kb up to 32mb chunk sizes
-
         self.isMainDict = True
         self.jsonData = list([list(jsonData.values())])
 
@@ -228,10 +234,9 @@ class SerializerJsonIterator:
         
         self.array = None
 
-        # self.mode = mode
+      
         
-        
-        self.serializer = SerializerIt()
+        self.serializer = SerializerIt(mode=mode)
         self.serializer.addTsonSpec()
         self.serializer.addMapHead(jsonData)
 
@@ -239,7 +244,7 @@ class SerializerJsonIterator:
         self.bytesWritten = 0
 
 
-
+    # @profile
     def __listtype(self, obj):
         currType = None
         prevType = None
@@ -253,19 +258,16 @@ class SerializerJsonIterator:
         else:
             return MIXED_LIST
 
+        baseClass = obj[0].__class__
+        z = [isinstance(o, baseClass) != baseClass for o in obj]
+        classComp = list(compress(range(len(z)), z))
 
-        for o in obj:
-            if prevType is None:
-                prevType = o.__class__
-                continue
-            
-            currType = o.__class__
+        if len(classComp) > 0:
+            if listType == NUMERIC_LIST and isinstance(obj[classComp[0]], (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
+                return MIXED_NUMERIC_LIST
+            else:
+                return MIXED_LIST
 
-            if prevType != currType:
-                if listType == NUMERIC_LIST and isinstance(o, (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
-                    return MIXED_NUMERIC_LIST
-                else:
-                    return MIXED_LIST
         
         return listType
             
@@ -278,7 +280,6 @@ class SerializerJsonIterator:
     def __iter__(self):
         return self
 
-    # from line_profiler import profile
     # @profile
     def __next__(self):
          
@@ -297,11 +298,12 @@ class SerializerJsonIterator:
                     if self.level <= -1:
                         break
 
-                    # numObjs = len(self.keys[self.level][:])
                     if not self.level in self.numObjs:
                         self.numObjs[self.level] = len(self.keys[self.level][:])
                     
                     n = self.numObjs[self.level]
+                    
+                    
                     idx = self.arrayIdx[self.level]
 
                 if self.level <= -1: 
@@ -396,10 +398,17 @@ class SerializerJsonIterator:
                 else:
                     self.serializer.addListHead(obj)
 
+                    
+                    if not self.level in self.numObjs:
+                        self.numObjs[self.level] = 0
+
                     for k in np.arange(len(obj)-1, -1, -1):
                         o = obj[k]
                         self.jsonData[self.level].insert(self.arrayIdx[self.level], o)
                         self.keys[self.level].insert(self.arrayIdx[self.level],"@@NOKEY@@")
+                        self.numObjs[self.level] = self.numObjs[self.level]+1
+
+                    # self.numObjs[self.level] = len(self.keys[self.level][:])
 
             # # Maps
             elif isinstance(obj, dict):
@@ -419,8 +428,8 @@ class SerializerJsonIterator:
                     self.jsonData.append(list(obj.values()))
                 else:
                     self.keys[self.level] = keys
+                    self.numObjs[self.level] = len(keys)
                     self.jsonData[self.level] = list(obj.values())
-
 
                 continue
 
@@ -492,7 +501,7 @@ class Serializer:
         else:
             return MIXED_LIST
 
-
+            
         for o in obj:
             if prevType is None:
                 prevType = o.__class__
