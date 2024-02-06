@@ -236,7 +236,7 @@ class SerializerJsonIterator:
 
       
         
-        self.serializer = SerializerIt(mode=mode)
+        self.serializer = SerializerIt()
         self.serializer.addTsonSpec()
         self.serializer.addMapHead(jsonData)
 
