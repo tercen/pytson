@@ -1,9 +1,11 @@
-import struct, math
+import struct , math
 import numpy as np
 import pytson.spec as spec
 from pytson.error import TsonError
-# from line_profiler import profile
-from itertools import compress
+from line_profiler import profile
+
+import array
+import string
 
 # support for py2.x and py3.x+
 # most likely we should just drop py2.x at all
@@ -25,6 +27,9 @@ class SerializerIt:
     def __init__(self, con=io.BytesIO()):
         self.con = con
         self.numListType = None
+        self.null_pack = struct.pack("<B", spec.NULL_TYPE)
+        self.objLen = None
+
 
     def addType(self, spec_type):
         self.con.write(struct.pack("<B", spec_type))
@@ -61,11 +66,23 @@ class SerializerIt:
         self.addNull()
 
         return self.con.tell()
+    
 
+    # def addCString_deprecated(self, obj):
+    #     #struct.pack("<B", spec_type)
+    #     self.con.write(struct.pack("{0}s".format(len(obj)), obj.encode("utf-8")))
+    #     self.addNull()
+
+    #     return self.con.tell()
+    # Refactor of the function above for about 50% speed-up
+    # In addCString_deprecated, obj is a single string, whereas now it is a list of strings
+    # The lsit is packed into bytes + null termination byte and sent to the buffer once
     def addCString(self, obj):
-        self.con.write(struct.pack("{0}s".format(len(obj)), obj.encode("utf-8")))
-        self.addNull()
-        return self.con.tell()
+        self.con.write(b''.join( [struct.pack("{0}s".format(\
+            len(obj[int(c/2)])), obj[int(c/2)].encode("utf-8")  )\
+                  if c%2 == 0 else b"\x00" for c in range(0,len(obj)*2)]) )
+
+        #return self.con.tell()
 
     def addInteger(self, obj):
         self.addType(spec.INTEGER_TYPE)
@@ -144,7 +161,6 @@ class SerializerIt:
         # self.con.write(obj.tobytes())
 
 
-
     
     # @profile
     def addChunkedNumericArray(self, obj, chunkSize, currentWritten=0, startIndex=0):
@@ -155,42 +171,70 @@ class SerializerIt:
 
         isBaseList = type(obj) == list
         if not isBaseList:
-            while idx < lObj:
-                bytesWritten = bytesWritten + self.con.write(obj[idx].tobytes())
-                idx = idx + 1
-                if bytesWritten >= chunkSize:
-                    break
-        else:
             while idx < lObj and bytesWritten < chunkSize:
-                # Base python list
-                if self.numListType == 1:
-                    bytesWritten = bytesWritten + self.con.write(struct.pack("<i", obj[idx]))
-                else:
-                    bytesWritten = bytesWritten + self.con.write(struct.pack("<d", obj[idx]))
-                idx = idx + 1
+                bytesWritten = bytesWritten + self.con.write(obj[idx].tobytes())
+                idx += 1
+        else:
+            bytesToWrite = chunkSize - currentWritten
+
+            if self.numListType == 1:
+                typeString = "<i"
+                if bytesToWrite > 0:
+                    nToWrite = math.ceil(bytesToWrite/4)
+            else:
+                typeString = "<d"
+                nToWrite = math.ceil(bytesToWrite/8)
+
+            # if self.mode == "old":
+            #     while idx < lObj and bytesWritten < chunkSize:
+            #         sp = struct.pack(typeString, obj[idx])
+            #         bytesWritten = bytesWritten + self.con.write(sp)
+            #         idx += 1
+                    
+            # else:
+            if (idx+nToWrite) >= lObj:
+                nToWrite = lObj-idx
+            idx0 = idx
+            idxf = idx + nToWrite
+
+            packedBytes = array.array(typeString[1], obj[idx0:idxf]).tobytes()
+            self.con.write(packedBytes)
+            idx += nToWrite
+
 
             
         if idx >= len(obj):
             idx = -1
         return [self.con.tell(), idx]
 
+
     def addChunkedStringArray(self, obj, chunkSize, currentWritten=0, startIndex=0):
         bytesWritten = currentWritten
         idx = startIndex
+
+        nB1 = self.getSize()
         lObj = len(obj)
-        while idx < lObj:
-            nB1 = self.getSize()
-            nB2 = self.addCString(obj[idx])
 
-            bytesWritten = bytesWritten + (nB2-nB1)
-            idx = idx + 1
+        bytesToWrite = chunkSize - currentWritten
 
+        if bytesToWrite > 0:
+            i1 = idx
+            
+            while idx < lObj and bytesWritten < chunkSize:
+                i2 = idx
+                nB2 = len(obj[idx]) + 1 # +1: null termination character for string in a list
+                bytesWritten += (nB2-nB1)
+                idx += 1
+                nB1 = nB2
+                
 
-            if bytesWritten >= chunkSize:
-                break
+            i2 = i2 +1
+            self.addCString(obj[i1:i2])
+
 
         if idx >= len(obj):
             idx = -1
+
         return [self.con.tell(), idx]
 
 
@@ -233,7 +277,6 @@ class SerializerJsonIterator:
         self.chunkedIndex = 0
         
         self.array = None
-     
         
         self.serializer = SerializerIt()
         self.serializer.addTsonSpec()
@@ -243,7 +286,7 @@ class SerializerJsonIterator:
         self.bytesWritten = 0
 
 
-    # @profile
+    @profile
     def __listtype(self, obj):
         currType = None
         prevType = None
@@ -256,20 +299,19 @@ class SerializerJsonIterator:
             listType = NUMERIC_LIST
         else:
             return MIXED_LIST
+        #NOTE numeric lists are being turned into float arrays
+        # if self.mode == "old":
+            
+        #     for o in obj:
+        #         if prevType is None:
+        #             prevType =o.__class__
+        #         currType = o.__class__
 
-
-        for o in obj:
-            if prevType is None:
-                prevType = o.__class__
-                continue
-
-            currType = o.__class__
-
-            if prevType != currType:
-                if listType == NUMERIC_LIST and isinstance(o, (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
-                    return MIXED_NUMERIC_LIST
-                else:
-                    return MIXED_LIST
+        #         if prevType != currType:
+        #             if listType == NUMERIC_LIST and isinstance(o, (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
+        #                 return MIXED_NUMERIC_LIST
+        #             else:
+        #                 return MIXED_LIST
         
         return listType
             
@@ -282,7 +324,7 @@ class SerializerJsonIterator:
     def __iter__(self):
         return self
 
-    # @profile
+    @profile
     def __next__(self):
          
         while True:
@@ -344,11 +386,12 @@ class SerializerJsonIterator:
 
             # # # String, Int/float and other lists
             elif isinstance(obj, np.ndarray) or isinstance(obj, list):
+
                 if notAddingArray:
                     listType = self.__listtype(obj)
                 else:
                     listType = None
-                # if self.__islisttype(obj, typeList=[str]):
+                
                 if self.addingStringArray or listType == STRING_LIST:
                     if not self.addingStringArray:
                         self.serializer.addStringListHead(obj)
@@ -371,14 +414,18 @@ class SerializerJsonIterator:
                         self.chunkedIndex = 0
 
                 elif self.addingIntegerArray or listType == NUMERIC_LIST or listType == MIXED_NUMERIC_LIST:
-                    # if isinstance(obj, list):
-                        # Converts
-                        # pass
-                        # raise TsonError("Base Python lists are not supported for numeric arrays. Please convert to numpy array with numpy.array(list).")
                     if not self.addingIntegerArray:
-                        if listType == MIXED_NUMERIC_LIST:
-                            # Upcasts the list to float
-                            obj = [float(i) for i in obj]
+                        if not isinstance(obj, list):
+                            # Packing base lists into bytes is currently faster by about 50%
+                            obj = obj.tolist()
+                        # if self.mode == "old":
+                        #     if listType == MIXED_NUMERIC_LIST:
+                        #         # Upcasts the list to float
+                        #         obj = [float(i) for i in obj]
+                        # else:
+                        if listType == NUMERIC_LIST:
+                            map(float, obj)
+
                         self.serializer.addIntegerListHead(obj)
 
                     
