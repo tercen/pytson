@@ -179,8 +179,8 @@ class SerializerIt:
 
             if self.numListType == 1:
                 typeString = "<i"
-                if bytesToWrite > 0:
-                    nToWrite = math.ceil(bytesToWrite/4)
+                
+                nToWrite = math.ceil(bytesToWrite/4)
             else:
                 typeString = "<d"
                 nToWrite = math.ceil(bytesToWrite/8)
