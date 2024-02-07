@@ -2,10 +2,10 @@ import struct , math
 import numpy as np
 import pytson.spec as spec
 from pytson.error import TsonError
-from line_profiler import profile
+#from line_profiler import profile
 
 import array
-import string
+#import string
 
 # support for py2.x and py3.x+
 # most likely we should just drop py2.x at all
@@ -162,7 +162,7 @@ class SerializerIt:
 
 
     
-    # @profile
+    # #@profile
     def addChunkedNumericArray(self, obj, chunkSize, currentWritten=0, startIndex=0):
         bytesWritten = currentWritten
 
@@ -286,7 +286,7 @@ class SerializerJsonIterator:
         self.bytesWritten = 0
 
 
-    @profile
+    #@profile
     def __listtype(self, obj):
         currType = None
         prevType = None
@@ -324,7 +324,7 @@ class SerializerJsonIterator:
     def __iter__(self):
         return self
 
-    @profile
+    #@profile
     def __next__(self):
          
         while True:
