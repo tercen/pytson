@@ -4,6 +4,7 @@ import pytson.spec as spec
 from pytson.error import TsonError
 import sys
 
+
 # support for py2.x and py3.x+
 # most likely we should just drop py2.x at all
 from io import BytesIO as StringIO
@@ -15,7 +16,11 @@ type_struct = struct.Struct("<B")
 
 
 class DeSerializer:
-    def __init__(self, con):
+    def __init__(self, con, mode = "new", chunk=8*1024):
+        self.byteChunk = bytes()
+        self.chunkPointer = 0
+        self.chunkSize = chunk
+        self.mode= mode
         if con is None:
             raise TsonError("Connection cannot be None.")
 
@@ -23,7 +28,6 @@ class DeSerializer:
             raise TsonError("Connection buffer is empty.")
 
         self.con = con
-        # self.bytesRead = 0 # Control this because HTTPResponse has no tell() or seek() methods
 
         version = self.readObject()
 
@@ -32,18 +36,36 @@ class DeSerializer:
                 f"TSON version mismatch, found: {version}, expected : {spec.TSON_SPEC_VERSION}"
             )
 
+        
         self.obj = self.readObject()
+    
+    def read(self,  nRead):
+        if self.mode == "old":
+            return self.con.read(nRead)
+        else:
+            if (self.chunkPointer + nRead) > self.chunkSize or len(self.byteChunk) < nRead:
+                self.read_new_chunk()
+
+         
+            i1 = self.chunkPointer
+            i2 = self.chunkPointer + nRead 
+            
+            bts = self.byteChunk[i1:i2]
+            
+            self.chunkPointer = i2 
+            
+            return bts
+        
+    def read_new_chunk(self):
+        self.byteChunk = self.byteChunk[self.chunkPointer:] + self.con.read(self.chunkSize)
+        self.chunkPointer = 0
+
 
     def readType(self):
-        return type_struct.unpack(self.con.read(1))[0]
+        return type_struct.unpack(self.read(1))[0]
 
     def readLength(self):
-        # to:do - check list length
-        _len = int_struct.unpack(self.con.read(4))[0]
-
-        # if _len == 0:
-        #     raise TsonError("Found length of zero")
-
+        _len = int_struct.unpack(self.read(4))[0]
         return _len
 
     # Add object
@@ -93,28 +115,44 @@ class DeSerializer:
 
     def readString(self):
         r = []
-        bytesRead = 0
-        while True:
-            b = self.con.read(1)
-            # print(r, b)
-            if b == b"\x00":
-                break
-            
-            
-            bytesRead = bytesRead + len(b)
-            r.append(b.decode("utf-8", errors="ignore"))
+        if self.mode == "old":
+            bytesRead = 0
+            while True:
+                b = self.read(1)
+                # print(r, b)
+                if b == b"\x00":
+                    break
+                
+                
+                bytesRead = bytesRead + len(b)
+                r.append(b.decode("utf-8", errors="ignore"))
 
-        return ["".join(r), bytesRead+1]
+            
+
+            return ["".join(r), bytesRead+1]
+        else:
+            
+            while True:
+                b = self.read(1)
+                # print(r, b)
+                if b == b"\x00":
+                    break
+               
+            
+                r.append(b.decode("utf-8", errors="ignore"))
+
+            return ["".join(r), len(r)+1]
+
         # return "".join([x.decode("utf-8") for x in i])
 
     def readInteger(self):
-        return int_struct.unpack(self.con.read(4))[0]
+        return int_struct.unpack(self.read(4))[0]
 
     def readDouble(self):
-        return double_struct.unpack(self.con.read(8))[0]
+        return double_struct.unpack(self.read(8))[0]
 
     def readBool(self):
-        return type_struct.unpack(self.con.read(1))[0] > 0
+        return type_struct.unpack(self.read(1))[0] > 0
 
     # Basic list
     def readList(self):
@@ -143,12 +181,12 @@ class DeSerializer:
 
     def readTypedNumList(self, type, size):
         l = self.readLength()
-        return np.frombuffer(self.con.read(size * l), dtype=type)
+        return np.frombuffer(self.read(size * l), dtype=type)
 
     def readStringList(self):
         l = self.readLength()
         result = []
-        self.con
+
         # _start = self.con.tell()
         bytesRead = 0
 
