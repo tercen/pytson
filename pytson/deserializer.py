@@ -16,7 +16,7 @@ type_struct = struct.Struct("<B")
 
 
 class DeSerializer:
-    def __init__(self, con, mode = "new", chunk=8*1024):
+    def __init__(self, con, mode = "old", chunk=8*1024):
         self.byteChunk = bytes()
         self.chunkPointer = 0
         self.chunkSize = chunk
