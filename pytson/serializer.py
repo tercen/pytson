@@ -296,7 +296,10 @@ class SerializerJsonIterator:
         elif isinstance(obj[0], str):
             listType = STRING_LIST
         elif isinstance(obj[0], (int, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64, float,  np.float32, np.float64)):
-            listType = NUMERIC_LIST
+            if np.isnan(np.sum(obj)):
+                listType = MIXED_LIST
+            else:
+                listType = NUMERIC_LIST
         else:
             return MIXED_LIST
         #NOTE numeric lists are being turned into float arrays
